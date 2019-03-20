@@ -1,8 +1,7 @@
 /**
- * vim: set ts=4 :
  * =============================================================================
- * SourceMod Zombie Mod Extension by Ushakov Nikita
- * Copyright (C) 2015-2017 AlliedModders LLC.  All rights reserved.
+ * SourceMod Zombie Escape Extension
+ * Copyright (C) 2015-2018 Nikita Ushakov.  All rights reserved.
  * =============================================================================
  *
  * This program is free software; you can redistribute it and/or modify it under
@@ -25,8 +24,6 @@
  * this exception to all derivative works.  AlliedModders LLC defines further
  * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
  * or <http://www.sourcemod.net/license.php>.
- *
- * Version: $Id$
  */
 
 #ifndef _INCLUDE_SOURCEMOD_EXTENSION_NATIVES_H_
@@ -34,13 +31,39 @@
  
 /**
  * @file natives.h
- * @brief Natives code header.
+ * @brief Natives module code header.
  */
- 
+
+/* Extern native list */
+extern sp_nativeinfo_t g_ZombieModNatives[];
+
+/* Extern round variables */
+extern bool g_IsNewRound;
+extern bool g_IsEndRound;
+extern bool g_IsOnRound;
+
+/* Extern some util functions */
+extern bool UTIL_InfectPlayer(int clientIndex);
+extern bool UTIL_HumanizePlayer(int clientIndex);
+extern unsigned int UTIL_GetHumans();
+extern unsigned int UTIL_GetZombies();
+extern unsigned int UTIL_GetAlive();
+extern unsigned int UTIL_GetPlaying();
+
 /**
- * Number of max valid addons.
- **/
-#define ZombieClassMax 	32
+ * @brief Initialize natives and library.
+ */
+void NativeLoad();
+
+/**
+ * @brief Reset natives.
+ */
+void NaviteShutDown();
+
+
+ 
+/* Number of max valid classes */
+#define MAX_CLASSES 	32
 
 /**
  * List of operation types for zombie classes data.
@@ -50,13 +73,45 @@ struct ZombieClassData
 	char *ZombieClass_Name;
 	char *ZombieClass_Model;
 	char *ZombieClass_Claw;
-	unsigned int ZombieClass_Health;
+	int ZombieClass_Health;
 	float ZombieClass_Speed;
 	float ZombieClass_Gravity;
 	float ZombieClass_KnockBack;
 	bool ZombieClass_Female;
+	int ZombieClass_BodyID;
 	int ZombieClass_ClawID;
 };
+
+/**
+ * List of operation types for human classes data.
+ **/
+struct HumanClassData
+{
+	char *HumanClass_Name;
+	char *HumanClass_Model;
+	char *HumanClass_Arm;
+	int HumanClass_Health;
+	float HumanClass_Speed;
+	float HumanClass_Gravity;
+	int HumanClass_Armor;
+	bool HumanClass_Female;
+	int HumanClass_BodyID;
+	int HumanClass_ArmID;
+};
+
+/**
+ * @brief Copy string to another.
+ *
+ * @param dest  The destenation string. 
+ * @param src   The string, which need to be copied.
+ * @param count The destenation string lenght. 
+ */
+unsigned int strncopy(char *dest, const char *src, size_t count);
+
+
+//*********************************************************************
+//*                  		ZOMBIE CLASS NATIVES           	  	  	  *
+//*********************************************************************
 
 /**
  * @brief Gets the name of a zombie class at a given index.
@@ -64,22 +119,23 @@ struct ZombieClassData
  * @param iD     	 		The class index.
  * @param sModel     		The string to return name in.
  **/
-void ZombieGetName(int iD, char *sModel);
+char *ZombieGetName(int iD, char *sModel);
 
 /**
- * @brief Gets the player model of a zombie class at a given index.
+ * @brief Gets the client model of a zombie class at a given index.
  *
  * @param iD     	 		The class index.
  * @param sModel      		The string to return name in.
  **/
-void ZombieGetModel(int iD, char *sModel);
+char *ZombieGetModel(int iD, char *sModel);
+
 /**
  * @brief Gets the knife model of a zombie class at a given index.
  *
  * @param iD     	 		The class index.
  * @param sModel      		The string to return name in.
  **/
-void ZombieGetClawModel(int iD, char *sModel);
+char *ZombieGetClawModel(int iD, char *sModel);
 
 /**
  * @brief Gets the health of the zombie class.
@@ -112,6 +168,7 @@ float ZombieGetGravity(int iD);
  * @return          		The knockback amount.	
  **/
 float ZombieGetKnockBack(int iD);
+
 /**
  * @brief Check the gender of the zombie class.
  *
@@ -121,6 +178,14 @@ float ZombieGetKnockBack(int iD);
 bool ZombieIsFemale(int iD);
 
 /**
+ * @brief Gets the index of the zombie class player model.
+ *
+ * @param iD        		The class index.
+ * @return          		The model index.	
+ **/
+int ZombieGetBodyIndex(int iD);
+
+/**
  * @brief Gets the index of the zombie class claw model.
  *
  * @param iD        		The class index.
@@ -128,12 +193,89 @@ bool ZombieIsFemale(int iD);
  **/
 int ZombieGetClawIndex(int iD);
 
+
+//*********************************************************************
+//*                  		HUMAN CLASS NATIVES           	  	  	  *
+//*********************************************************************
+
 /**
- * @brief Sets the index of the zombie class claw model.
+ * @brief Gets the name of a human class at a given index.
  *
- * @param iD         		The class index.
- * @param modelIndex  		The model index.	
+ * @param iD     	 		The class index.
+ * @param sModel     		The string to return name in.
  **/
-void ZombieSetClawIndex(int iD, int modelIndex);
+char *HumanGetName(int iD, char *sModel);
+
+/**
+ * @brief Gets the client model of a human class at a given index.
+ *
+ * @param iD     	 		The class index.
+ * @param sModel      		The string to return name in.
+ **/
+char *HumanGetModel(int iD, char *sModel);
+
+/**
+ * @brief Gets the arm model of a human class at a given index.
+ *
+ * @param iD     	 		The class index.
+ * @param sModel      		The string to return name in.
+ **/
+char *HumanGetArmModel(int iD, char *sModel);
+
+/**
+ * @brief Gets the health of the human class.
+ *
+ * @param iD        		The class index.
+ * @return          		The health amount.	
+ **/
+int HumanGetHealth(int iD);
+
+/**
+ * @brief Gets the speed of the human class.
+ *
+ * @param iD        		The class index.
+ * @return          		The speed amount.	
+ **/
+float HumanGetSpeed(int iD);
+
+/**
+ * @brief Gets the gravity of the human class.
+ *
+ * @param iD        		The class index.
+ * @return          		The gravity amount.	
+ **/
+float HumanGetGravity(int iD);
+
+/**
+ * @brief Gets the armor of the human class.
+ *
+ * @param iD        		The class index.
+ * @return          		The knockback amount.	
+ **/
+int HumanGetArmor(int iD);
+
+/**
+ * @brief Check the gender of the human class.
+ *
+ * @param iD        		The class index.
+ * @return          		True or false.
+ **/
+bool HumanIsFemale(int iD);
+
+/**
+ * @brief Gets the index of the human class player model.
+ *
+ * @param iD        		The class index.
+ * @return          		The model index.	
+ **/
+int HumanGetBodyIndex(int iD);
+
+/**
+ * @brief Gets the index of the human class arm model.
+ *
+ * @param iD        		The class index.
+ * @return          		The model index.	
+ **/
+int HumanGetArmIndex(int iD);
 
 #endif // _INCLUDE_SOURCEMOD_EXTENSION_NATIVES_H_

@@ -1,8 +1,7 @@
 /**
- * vim: set ts=4 :
  * =============================================================================
- * SourceMod Zombie Mod Extension by Ushakov Nikita
- * Copyright (C) 2015-2017 AlliedModders LLC.  All rights reserved.
+ * SourceMod Zombie Escape Extension
+ * Copyright (C) 2015-2018 Nikita Ushakov.  All rights reserved.
  * =============================================================================
  *
  * This program is free software; you can redistribute it and/or modify it under
@@ -25,8 +24,6 @@
  * this exception to all derivative works.  AlliedModders LLC defines further
  * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
  * or <http://www.sourcemod.net/license.php>.
- *
- * Version: $Id$
  */
  
 /**
@@ -36,82 +33,20 @@
 
 #include "playertools.h"
 
-/* Initialize player variables */
-ZPBaseClient g_PlayersList[MAXPLAYERS+1];
+
+/* Initialize player data array */
+CBaseClient g_PlayersList[65];
 
 /**
- * @brief Called once a client successfully connects.
- *
- * @param clientIndex 	The client index.
- */
-void ClientListener::OnClientConnected(int clientIndex)
-{
-	// Reset player data array
-	memset(&g_PlayersList[clientIndex], 0, sizeof(ZPBaseClient));
-}
-
-/**
- * @brief Called when a client is entering the game.
- *
- * @param clientIndex 	The client index.
- */
-void ClientListener::OnClientPutInServer(int clientIndex)
-{
-	// Validate client
-	ZPBaseClient *CPlayer = ZP_GetPlayer(clientIndex);
-	if (!CPlayer)
-	{
-		return;
-	}
-	
-	// Validate entity
-	CBaseEntity *pEntity = ZP_GetBaseEntity(clientIndex);
-	if (!pEntity)
-	{
-		return;
-	}
-
-	// Update main player variables
-	CPlayer->pEdict 			= gamehelpers->EdictOfIndex(clientIndex);
-	CPlayer->pEntity 			= pEntity;
-	CPlayer->pInfo 				= playerinfomngr->GetPlayerInfo(CPlayer->pEdict);
-	CPlayer->userid 			= engine->GetPlayerUserId(CPlayer->pEdict);
-}
-
-/**
- * @brief Called when a client is disconnected from the server.
- *
- * @param clientIndex 	The client index.
- */
-void ClientListener::OnClientDisconnected(int clientIndex)
-{
-	// Validate client
-	ZPBaseClient *CPlayer = ZP_GetPlayer(clientIndex);
-	if (!CPlayer)
-	{
-		return;
-	}
-
-	// Kill respawn timer
-	if (CPlayer->respawn_timer)
-	{
-		timersys->KillTimer(CPlayer->respawn_timer);
-	}
-	
-	// Reset client data array
-	memset(CPlayer, 0, sizeof(ZPBaseClient));
-}
-
-/**
- * @brief Validate data array of the client.
+ * @brief Gets the client data array.
  *
  * @param clientIndex	The client index.
- * @return				The data array.
+ * @return				The client data.
  **/
-ZPBaseClient *ZP_GetPlayer(int clientIndex)
+inline CBaseClient *GetPlayer(int clientIndex)
 {
-	// Validate index
-	if (clientIndex < 1 || clientIndex > gpGlobals->maxClients)
+	// Validate client index
+	if (clientIndex < 1 || clientIndex > globals->maxClients)
 	{
 		return NULL;
 	}
@@ -121,16 +56,23 @@ ZPBaseClient *ZP_GetPlayer(int clientIndex)
 }
 
 /**
- * @brief Validate index of the entity.
+ * @brief Gets the cbaseentity index.
  *
- * @param index			The index.
- * @return				The entity index.
+ * @param entityIndex	The entity index.
+ * @return				The cbaseentity index.
  **/
-CBaseEntity *ZP_GetBaseEntity(int index)
+inline CBaseEntity *GetBaseEntity(int entityIndex)
 {
-	// Validate entity
-	edict_t *pEdict = gamehelpers->EdictOfIndex(index);
+	// Validate edict
+	edict_t *pEdict = gamehelpers->EdictOfIndex(entityIndex);
 	if (!pEdict || pEdict->IsFree())
+	{
+		return NULL;
+	}
+	
+	// Validate client
+	IGamePlayer *pGamePlayer = playerhelpers->GetGamePlayer(pEdict);
+	if (!pGamePlayer || !pGamePlayer->IsConnected())
 	{
 		return NULL;
 	}
@@ -147,20 +89,174 @@ CBaseEntity *ZP_GetBaseEntity(int index)
 }
 
 /**
- * @brief Validate aliveness of the client.
+ * @brief Gets the offset index.
  *
- * @param index			The index.
+ * @param pEntity		The cbaseentity index.
+ * @param sName			The name of offset.	 
+ * @param offset		The ofset index.
  * @return				True or false.
  **/
-bool ZP_IsPlayerAlive(int clientIndex)
+inline bool GetDataMapOffset(CBaseEntity *pEntity, const char *sName, unsigned int &offset)
+{
+	// Validate data map 
+    datamap_t *pMap = gamehelpers->GetDataMap(pEntity);
+    if (!pMap)
+    {
+        return false;
+    }
+    
+	// Get offset in the data map
+    typedescription_t *typedesc = gamehelpers->FindInDataMap(pMap, sName);
+    
+	// Validate it
+    if (typedesc == NULL)
+    {
+        return false;
+    }
+
+	// Return success and store offset
+    offset = typedesc->fieldOffset;
+    return true;
+}  
+
+/**
+ * @brief Initialize clients listeners.
+ */
+void ToolInit()
+{
+	// Set listeners
+	playerhelpers->AddClientListener(&g_ClientListener);
+}
+
+/**
+ * @brief Destroy clients listeners.
+ */
+void ToolPurge()
+{
+	// Remove listeners
+	playerhelpers->RemoveClientListener(&g_ClientListener);
+}
+
+/**
+ * @brief Called once a client successfully connects.
+ *
+ * @param clientIndex 	The client index.
+ */
+void ClientListener::OnClientConnected(int clientIndex)
+{
+	// Reset player data array
+	memset(&g_PlayersList[clientIndex], 0, sizeof(CBaseClient));
+}
+
+/**
+ * @brief Called when a client is entering the game.
+ *
+ * @param clientIndex 	The client index.
+ */
+void ClientListener::OnClientPutInServer(int clientIndex)
 {
 	// Validate client
-	ZPBaseClient *CPlayer = ZP_GetPlayer(clientIndex);
-	if (!CPlayer || !CPlayer->pEntity)
+	CBaseClient *CPlayer = GetPlayer(clientIndex);
+	if (!CPlayer)
 	{
-		return false;
+		return;
+	}
+	
+	// Validate entity
+	CBaseEntity *pEntity = GetBaseEntity(clientIndex);
+	if (!pEntity)
+	{
+		return;
 	}
 
-	// Return true on success
-	return CPlayer->pInfo->IsDead() ? false : true;
+	// Update main player variables
+	CPlayer->pEdict 			= gamehelpers->EdictOfIndex(clientIndex);
+	CPlayer->pEntity 			= pEntity;
+	CPlayer->pInfo 				= playerinfomngr->GetPlayerInfo(CPlayer->pEdict);
+	CPlayer->pBot 				= botmanager->GetBotController(CPlayer->pEdict);
+	CPlayer->userid 			= engine->GetPlayerUserId(CPlayer->pEdict);
+}
+
+/**
+ * @brief Called when a client is disconnected from the server.
+ *
+ * @param clientIndex 	The client index.
+ */
+void ClientListener::OnClientDisconnected(int clientIndex)
+{
+	// Validate client
+	CBaseClient *CPlayer = GetPlayer(clientIndex);
+	if (!CPlayer)
+	{
+		return;
+	}
+
+	// Reset client data array
+	memset(CPlayer, 0, sizeof(CBaseClient));
+}
+
+/**
+ * @brief Returns if the client is alive or dead.
+ *
+ * @param CPlayer		The client data.
+ * @return				True if the client is alive, false otherwise.
+ **/
+bool IsPlayerAlive(CBaseClient *CPlayer)
+{
+	return (!CPlayer->pInfo || CPlayer->pInfo->IsObserver() || CPlayer->pInfo->IsDead()) ? false : true;
+}
+
+/**
+ * @brief Retrieves a client's team index.
+ *
+ * @param CPlayer		The client data.
+ * @return				Team index the client is on (mod specific).			
+ **/
+int GetPlayerTeamIndex(CBaseClient *CPlayer)
+{
+	return CPlayer->pInfo->GetTeamIndex();
+}
+
+/**
+ * @brief Returns the client's frag count.
+ *
+ * @param CPlayer		The client data.
+ * @return				The frag count.	
+ **/
+int GetPlayerFragCount(CBaseClient *CPlayer)
+{
+	return CPlayer->pInfo->GetFragCount();
+}
+
+/**
+ * @brief Returns the client's death count.
+ *
+ * @param CPlayer		The client data.
+ * @return				The death count.	
+ **/
+int GetPlayerDeathCount(CBaseClient *CPlayer)
+{
+	return CPlayer->pInfo->GetDeathCount();
+}
+
+/**
+ * @brief Returns the client's health.
+ *
+ * @param CPlayer		The client data.
+ * @return				The health value.
+ **/
+int GetPlayerHealthValue(CBaseClient *CPlayer)
+{
+	return CPlayer->pInfo->GetHealth();
+}
+
+/**
+ * @brief Returns the client's armor.
+ *
+ * @param CPlayer		The client data.
+ * @return				The armor value.
+ **/
+int GetPlayerArmorValue(CBaseClient *CPlayer)
+{
+	return CPlayer->pInfo->GetArmorValue();
 }

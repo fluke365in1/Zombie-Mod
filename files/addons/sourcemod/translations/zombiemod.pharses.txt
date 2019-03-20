@@ -1,0 +1,49 @@
+"Phrases"
+{
+	// ===========================
+	// Color prefixes
+	// ===========================
+	
+	// @default 	"\x01"
+	// @red			"\x02"
+	// @lgreen		"\x03"
+	// @green		"\x04"
+
+	// ===========================
+	// Main messages
+	// ===========================
+
+	"Welcome Message"
+	{
+		"en"			"Press B for buy weapons\nPress F for open menu"
+	}
+	
+	"Mode start"
+	{
+		"en"			"Infection started!"
+	}
+	
+	// ===========================
+	// Menu choises
+	// ===========================
+	
+	"Menu Title"
+	{
+		"en"			"Main menu"
+	}
+	
+	"Choose zombieclass"
+	{
+		"en"			"Zombie classes"
+	}
+	
+	"Choose humanclass"
+	{
+		"en"			"Human classes"
+	}
+	
+	"Unstuck"
+	{
+		"en"			"Stuck ?"
+	}
+}

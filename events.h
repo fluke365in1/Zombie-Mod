@@ -1,8 +1,7 @@
 /**
- * vim: set ts=4 :
  * =============================================================================
- * SourceMod Zombie Mod Extension by Ushakov Nikita
- * Copyright (C) 2015-2017 AlliedModders LLC.  All rights reserved.
+ * SourceMod Zombie Escape Extension
+ * Copyright (C) 2015-2018 Nikita Ushakov.  All rights reserved.
  * =============================================================================
  *
  * This program is free software; you can redistribute it and/or modify it under
@@ -25,28 +24,43 @@
  * this exception to all derivative works.  AlliedModders LLC defines further
  * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
  * or <http://www.sourcemod.net/license.php>.
- *
- * Version: $Id$
  */
 
 #ifndef _INCLUDE_SOURCEMOD_EXTENSION_EVENTS_H_
 #define _INCLUDE_SOURCEMOD_EXTENSION_EVENTS_H_
  
 /**
- * @file events.cpp
- * @brief Events code header.
+ * @file events.h
+ * @brief Events module code header.
  */
  
-#include <igameevents.h>
-
-/* Extern round variables */
-extern bool g_IsNewRound;
-extern bool g_IsEndRound;
-extern bool g_IsOnRound;
-extern unsigned int g_nCounter;
+/**
+ * @brief Hook events.
+ */
+void EventInit();
 
 /**
- * @brief Event callbacks for when a main game timer is executed.
+ * @brief Unhook events.
+ */
+void EventPurge();
+
+/**
+ * @brief Map start hook events.
+ */
+void EventActivated();
+
+/**
+ * @brief Called each timer execution. (every second)
+ */
+void EventTimer();
+
+/**
+ * @brief Called right before mode is started.
+ **/
+void EventStartMode();
+
+/**
+ * @brief Event callbacks for the main game timer is executed.
  */
 class EventsCounter : public ITimedEvent
 {
@@ -61,21 +75,10 @@ public:
 	 */
 	ResultType OnTimer(ITimer *pTimer, void *pData)
 	{
-		// If round didn't start yet
-		if(g_IsNewRound)
-		{
-			// If counter is counting ?
-			if(g_nCounter)
-			{
-				// Debug
-				g_SMAPI->ConPrintf("$$$$$$$$$$$$======%d\n", g_nCounter);
-			}
-				
-			// Substitute second
-			g_nCounter--;
-		}
+		// Forward function to modules
+		EventTimer();
 		
-		// Allow counter
+		// Return infinitly
 		return Pl_Continue;
 	}
 
@@ -91,5 +94,75 @@ public:
 	}
 	
 } s_EventsCounter;
+
+/**
+ * @brief Event callbacks for the main game timer is executed.
+ */
+class EventsInitialize : public ITimedEvent
+{
+public:
+
+	/**
+	 * @brief Called when a timer is executed.
+	 *
+	 * @param pTimer		Pointer to the timer instance.
+	 * @param pData			Private pointer passed from host.
+	 * @return				Pl_Stop to stop timer, Pl_Continue to continue.
+	 */
+	ResultType OnTimer(ITimer *pTimer, void *pData)
+	{
+		// Return infinitly
+		return Pl_Continue;
+	}
+
+	/**
+	 * @brief Called when the timer has been killed.
+	 *
+	 * @param pTimer		Pointer to the timer instance.
+	 * @param pData			Private data pointer passed from host.
+	 */
+	void OnTimerEnd(ITimer *pTimer, void *pData)
+	{
+		// If round started, then infect
+		if(g_IsOnRound)
+		{
+			// Infect respawned players
+			UTIL_InfectPlayer((int)pData);
+		}
+		else
+		{
+			// Humanize respawned players
+			UTIL_HumanizePlayer((int)pData);
+		}
+	}
+	
+} s_EventsInitialize;
+
+/**
+ * @brief Important macroses.
+ */
+#define HOOK_EVENT2(name) \
+	if (!gameevents->FindListener(&g_cls_event_##name, #name)) \
+	{\
+		if (!gameevents->AddListener(&g_cls_event_##name, #name, true)) { \
+			g_SMAPI->ConPrintf("Could not hook event \"%s\"\n", #name); \
+			return; \
+		} \
+	} 
+
+#define UNHOOK_EVENT2(name) gameevents->RemoveListener(&g_cls_event_##name);
+
+#define DECLARE_EVENT(name) \
+    class cls_event_##name : public IGameEventListener2 \
+    { \
+    public: \
+        virtual void FireGameEvent(IGameEvent *event); \
+        virtual int GetEventDebugID( void ) { return EVENT_DEBUG_ID_INIT; } \
+    }; \
+    extern cls_event_##name g_cls_event_##name;
+	
+#define IMPLEMENT_EVENT(name) \
+    cls_event_##name g_cls_event_##name; \
+    void cls_event_##name::FireGameEvent(IGameEvent *event)
 
 #endif // _INCLUDE_SOURCEMOD_EXTENSION_EVENTS_H_

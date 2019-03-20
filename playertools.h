@@ -1,8 +1,7 @@
 /**
- * vim: set ts=4 :
  * =============================================================================
- * SourceMod Zombie Mod Extension by Ushakov Nikita
- * Copyright (C) 2015-2017 AlliedModders LLC.  All rights reserved.
+ * SourceMod Zombie Escape Extension
+ * Copyright (C) 2015-2018 Nikita Ushakov.  All rights reserved.
  * =============================================================================
  *
  * This program is free software; you can redistribute it and/or modify it under
@@ -25,8 +24,6 @@
  * this exception to all derivative works.  AlliedModders LLC defines further
  * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
  * or <http://www.sourcemod.net/license.php>.
- *
- * Version: $Id$
  */
  
 #ifndef _INCLUDE_SOURCEMOD_EXTENSION_PLAYERTOOLS_H_
@@ -34,27 +31,37 @@
  
 /**
  * @file playertools.h
- * @brief Player tools code header.
+ * @brief Player tools module code header.
  */
- 
-#include <edict.h>
-#include <iplayerinfo.h>
-#include <iserverentity.h>
 
+ 
 /**
- * List of the player data array.
+ * @brief Initialize clients listeners.
+ */
+void ToolInit();
+ 
+/**
+ * @brief Destroy clients listeners.
+ */
+void ToolPurge();
+
+
+ 
+/**
+ * List of the client data array.
  **/
-struct ZPBaseClient
+struct CBaseClient
 {
 	edict_t *pEdict;
 	CBaseEntity *pEntity;
 	IPlayerInfo *pInfo;
-	ITimer *respawn_timer;
+	IBotController *pBot;
 	int userid;
 	bool m_bZombie;
 	unsigned int m_nZombieClass;
 	unsigned int m_nZombieClassNext;
-	unsigned int m_nRespawnTimes;
+	unsigned int m_nHumanClass;
+	unsigned int m_nHumanClassNext;
 };
 
 /**
@@ -87,32 +94,52 @@ public:
 
 } g_ClientListener;
 
-/* Extern player variables */
-extern IPlayerInfoManager *playerinfomngr;
-extern CGlobalVars *gpGlobals;
+/**
+ * @brief Returns if the client is alive or dead.
+ *
+ * @param CPlayer		The client data.
+ * @return				True if the client is alive, false otherwise.
+ **/
+bool IsPlayerAlive(CBaseClient *CPlayer);
 
 /**
- * @brief Validate data array of the player.
+ * @brief Retrieves a client's team index.
  *
- * @param clientIndex	The client index.
- * @return				The data array.
+ * @param CPlayer		The client data.
+ * @return				Team index the client is on (mod specific).			
  **/
-ZPBaseClient *ZP_GetPlayer(int clientIndex);
+int GetPlayerTeamIndex(CBaseClient *CPlayer);
 
 /**
- * @brief Validate index of the entity.
+ * @brief Returns the client's frag count.
  *
- * @param index			The index.
- * @return				The entity index.
+ * @param CPlayer		The client data.
+ * @return				The frag count.	
  **/
-CBaseEntity *ZP_GetBaseEntity(int clientIndex);
+int GetPlayerFragCount(CBaseClient *CPlayer);
 
 /**
- * @brief Validate aliveness of the client.
+ * @brief Returns the client's death count.
  *
- * @param index			The index.
- * @return				True or false.
+ * @param CPlayer		The client data.
+ * @return				The death count.	
  **/
-bool ZP_IsPlayerAlive(int clientIndex);
+int GetPlayerDeathCount(CBaseClient *CPlayer);
+
+/**
+ * @brief Returns the client's health.
+ *
+ * @param CPlayer		The client data.
+ * @return				The health value.
+ **/
+int GetPlayerHealthValue(CBaseClient *CPlayer);
+
+/**
+ * @brief Returns the client's armor.
+ *
+ * @param CPlayer		The client data.
+ * @return				The armor value.
+ **/
+int GetPlayerArmorValue(CBaseClient *CPlayer);
 
 #endif // _INCLUDE_SOURCEMOD_EXTENSION_PLAYERTOOLS_H_

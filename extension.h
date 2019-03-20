@@ -1,8 +1,7 @@
 /**
- * vim: set ts=4 :
  * =============================================================================
- * SourceMod Zombie Mod Extension by Ushakov Nikita
- * Copyright (C) 2015-2017 AlliedModders LLC.  All rights reserved.
+ * SourceMod Zombie Escape Extension
+ * Copyright (C) 2015-2018 Nikita Ushakov.  All rights reserved.
  * =============================================================================
  *
  * This program is free software; you can redistribute it and/or modify it under
@@ -25,8 +24,6 @@
  * this exception to all derivative works.  AlliedModders LLC defines further
  * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
  * or <http://www.sourcemod.net/license.php>.
- *
- * Version: $Id$
  */
 
 #ifndef _INCLUDE_SOURCEMOD_EXTENSION_PROPER_H_
@@ -34,14 +31,33 @@
 
 /**
  * @file extension.h
- * @brief Main extension code header.
+ * @brief Sample extension code header.
  */
 
+/* Source mod sdk includes */
 #include "smsdk_ext.h"
 
+/* Source mod tools includes */
+#include <IBinTools.h>
+#include <ISDKTools.h>
+
+/* Game sdk includes */
+#include <edict.h>
+#include <iplayerinfo.h>
+#include <igameevents.h>
+#include <eiface.h>
+#include <sh_list.h>
+#include <itoolentity.h>
+#include <vstdlib/random.h>
+#include <server_class.h>
+#include <datamap.h>
+
+/* Teams */
+#define ZM_TEAM_T			2
+#define ZM_TEAM_CT			3
+
 /**
- * @brief Basic implementation of the SDK Extension.
- * Note: Uncomment one of the pre-defined virtual functions in order to use it.
+ * @brief The main implementation of the Zombie SDK Extension.
  */
 class ZombieMod : public SDKExtension
 {
@@ -68,60 +84,67 @@ public:
 	virtual void SDK_OnAllLoaded();
 
 	/**
-	 * @brief Called when the pause state is changed.
-	 */
-	//virtual void SDK_OnPauseChange(bool paused);
-
-	/**
 	 * @brief this is called when Core wants to know if your extension is working.
 	 *
 	 * @param error		Error message buffer.
 	 * @param maxlength	Size of error message buffer.
 	 * @return			True if working, false otherwise.
 	 */
-	//virtual bool QueryRunning(char *error, size_t maxlength);
+	virtual bool QueryRunning(char *error, size_t maxlength);
+	
+	/**
+	 * @brief Asks the extension whether it's safe to remove an external 
+	 * interface it's using.  If it's not safe, return false, and the 
+	 * extension will be unloaded afterwards.
+	 *
+	 * NOTE: It is important to also hook NotifyInterfaceDrop() in order to clean 
+	 * up resources.
+	 *
+	 * @param pInterface		Pointer to interface being dropped.  This 
+	 * 							pointer may be opaque, and it should not 
+	 *							be queried using SMInterface functions unless 
+	 *							it can be verified to match an existing 
+	 *							pointer of known type.
+	 * @return					True to continue, false to unload this 
+	 * 							extension afterwards.
+	 */
+	bool QueryInterfaceDrop(SMInterface *pInterface);
+	
+	/**
+	 * @brief Notifies the extension that an external interface it uses is being removed.
+	 *
+	 * @param pInterface		Pointer to interface being dropped.  This
+	 * 							pointer may be opaque, and it should not 
+	 *							be queried using SMInterface functions unless 
+	 *							it can be verified to match an existing 
+	 */
+	void NotifyInterfaceDrop(SMInterface *pInterface);
 public:
 #if defined SMEXT_CONF_METAMOD
 	/**
 	 * @brief Called when Metamod is attached, before the extension version is called.
 	 *
 	 * @param error			Error buffer.
-	 * @param maxlength		Maximum size of error buffer.
+	 * @param maxlen		Maximum size of error buffer.
 	 * @param late			Whether or not Metamod considers this a late load.
 	 * @return				True to succeed, false to fail.
 	 */
-	virtual bool SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlength, bool late);
-
-	/**
-	 * @brief Called when Metamod is detaching, after the extension version is called.
-	 * NOTE: By default this is blocked unless sent from SourceMod.
-	 *
-	 * @param error			Error buffer.
-	 * @param maxlength		Maximum size of error buffer.
-	 * @return				True to succeed, false to fail.
-	 */
-	//virtual bool SDK_OnMetamodUnload(char *error, size_t maxlength);
-
-	/**
-	 * @brief Called when Metamod's pause state is changing.
-	 * NOTE: By default this is blocked unless sent from SourceMod.
-	 *
-	 * @param paused		Pause state being set.
-	 * @param error			Error buffer.
-	 * @param maxlength		Maximum size of error buffer.
-	 * @return				True to succeed, false to fail.
-	 */
-	//virtual bool SDK_OnMetamodPauseChange(bool paused, char *error, size_t maxlength);
+	virtual bool SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late);
 #endif
 };
 
 /**
- * @brief Called when map is loaded.
+ * @brief Called when server's map was loaded.
  *
  * @param pEdictList		Edict list buffer.
  * @param edictCount		Maximum amount of entities.
  * @param clientMax			Maximum amount of players.
  */
-void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax);
+void SDK_OnMapload(edict_t *pEdictList, int edictCount, int clientMax);
+
+/**
+ * @brief Called when server's map was unloaded.
+ */
+void SDK_OnMapUnload();
 
 #endif // _INCLUDE_SOURCEMOD_EXTENSION_PROPER_H_

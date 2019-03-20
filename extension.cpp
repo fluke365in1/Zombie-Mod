@@ -1,8 +1,7 @@
 /**
- * vim: set ts=4 :
  * =============================================================================
- * SourceMod Zombie Mod Extension by Ushakov Nikita
- * Copyright (C) 2015-2017 AlliedModders LLC.  All rights reserved.
+ * SourceMod Zombie Escape Extension
+ * Copyright (C) 2015-2018 Nikita Ushakov.  All rights reserved.
  * =============================================================================
  *
  * This program is free software; you can redistribute it and/or modify it under
@@ -25,58 +24,43 @@
  * this exception to all derivative works.  AlliedModders LLC defines further
  * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
  * or <http://www.sourcemod.net/license.php>.
- *
- * Version: $Id$
  */
+
+/* Main header */
+#include "extension.h"
+
+/* Modules includes */
+#include "metamod.cpp"
+#include "cvars.cpp"
+#include "playertools.cpp"
+#include "natives.cpp"
+#include "forwards.cpp"
+#include "utils.cpp"
+#include "events.cpp"
 
 /**
  * @file extension.cpp
- * @brief Implement extension code here.
+ * @brief Implement main extension code here.
  */
 
-#include "extension.h"
-
-
-
-/* Extension modules */
-//#include "cvars.cpp"
-#include "playertools.cpp"
-#include "events.cpp"
-#include "natives.cpp"
-//#include "zombie.cpp"
-
-/* Global variables for extension's main interface */
-ZombieMod g_ZombieMod;	
-CGlobalVars *gpGlobals = NULL;
-IGameEventManager2 *gameevents = NULL;
-IPlayerInfoManager *playerinfomngr = NULL;
+/* Global singleton for extension's main interface */
+ZombieMod g_ZombieMod;		
 SMEXT_LINK(&g_ZombieMod);
-
-// Metamod hooks
-SH_DECL_HOOK3_void(IServerGameDLL, ServerActivate, SH_NOATTRIB, 0, edict_t *, int, int);
 
 /**
  * @brief This is called once all known extensions have been loaded.
+ * Note: It is is a good idea to add natives here, if any are provided.
  */
 void ZombieMod::SDK_OnAllLoaded()
 {
-	// Add listeners
-	playerhelpers->AddClientListener(&g_ClientListener);
-	
-	// Hook server events
-    HOOK_EVENT2(round_prestart);
-	HOOK_EVENT2(round_start);
-    HOOK_EVENT2(round_end);
-	
-	// Hook player events
-	HOOK_EVENT2(player_spawn);
-	HOOK_EVENT2(player_death);
+	// Forward function to modules
+	MetamodInit();
+	EventInit();
+	ToolInit();
+	UtilInit();
 
-	// Hook map load
-	SH_ADD_HOOK_STATICFUNC(IServerGameDLL, ServerActivate, gamedll, ServerActivate, true);
-	
-	// Version info 
-	g_SMAPI->ConPrintf("\n%s [%s]\n%s\n%s\n%s\n\n", SMEXT_CONF_NAME, SMEXT_CONF_VERSION, SMEXT_CONF_AUTHOR, SMEXT_CONF_URL, SMEXT_CONF_LICENSE);
+	// Return on success
+	return;
 }
 
 /**
@@ -89,12 +73,11 @@ void ZombieMod::SDK_OnAllLoaded()
  */
 bool ZombieMod::SDK_OnLoad(char *error, size_t maxlength, bool late)
 {
-	// Register library
-	sharesys->AddNatives(myself, g_ZombieNatives);
-	sharesys->RegisterLibrary(myself, "zombiemod");
-	
-	// Initialize globals
-	gpGlobals = g_SMAPI->GetCGlobals();
+	// Forward function to modules
+	MetamodLoad();
+	NativeLoad();
+	ForwardLoad();
+	CvarLoad();
 	
 	// Return on success
 	return true;
@@ -105,65 +88,119 @@ bool ZombieMod::SDK_OnLoad(char *error, size_t maxlength, bool late)
  */
 void ZombieMod::SDK_OnUnload()
 {
-	// Remove listeners
-	playerhelpers->RemoveClientListener(&g_ClientListener);
+	// Forward function to modules
+	MetamodPurge();
+	EventPurge();
+	ToolPurge();
+	ForwardPurge();
+	UtilPurge();
 	
-	// Unhook server events
-    UNHOOK_EVENT2(round_prestart);
-	UNHOOK_EVENT2(round_start);
-    UNHOOK_EVENT2(round_end);
-	
-	// Unhook player events
-	UNHOOK_EVENT2(player_spawn);
-	UNHOOK_EVENT2(player_death);
-	
-	// Unhook map load
-	SH_REMOVE_HOOK_STATICFUNC(IServerGameDLL, ServerActivate, gamedll, ServerActivate, true);
+	// Return on success
+	return;
 }
 
 /**
  * @brief Called when Metamod is attached, before the extension version is called.
  *
  * @param error			Error buffer.
- * @param maxlength		Maximum size of error buffer.
+ * @param maxlen		Maximum size of error buffer.
  * @param late			Whether or not Metamod considers this a late load.
  * @return				True to succeed, false to fail.
  */
 bool ZombieMod::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	// Load interfaces
-	GET_V_IFACE_CURRENT(GetEngineFactory, gameevents, IGameEventManager2, INTERFACEVERSION_GAMEEVENTSMANAGER2);
+	GET_V_IFACE_ANY(GetServerFactory, gameents, IServerGameEnts, INTERFACEVERSION_SERVERGAMEENTS);
 	GET_V_IFACE_ANY(GetServerFactory, playerinfomngr, IPlayerInfoManager, INTERFACEVERSION_PLAYERINFOMANAGER);
+	GET_V_IFACE_ANY(GetServerFactory, botmanager, IBotManager, INTERFACEVERSION_PLAYERBOTMANAGER);
+	GET_V_IFACE_ANY(GetServerFactory, server, IServerGameDLL, INTERFACEVERSION_SERVERGAMEDLL);
+	GET_V_IFACE_CURRENT(GetEngineFactory, gameevents, IGameEventManager2, INTERFACEVERSION_GAMEEVENTSMANAGER2);
+	GET_V_IFACE_CURRENT(GetEngineFactory, icvar, ICvar, CVAR_INTERFACE_VERSION);
 	
 	// Return on success
 	return true;
 }
 
 /**
- * @brief Called when map is loaded.
+ * @brief this is called when Core wants to know if your extension is working.
+ *
+ * @param error		Error message buffer.
+ * @param maxlength	Size of error message buffer.
+ * @return			True if working, false otherwise.
+ */
+bool ZombieMod::QueryRunning(char *error, size_t maxlength)
+{
+	// Validate bintools
+	SM_CHECK_IFACE(BINTOOLS, bintools);
+	
+	//Return on success
+	return true;
+}
+
+/**
+ * @brief Asks the extension whether it's safe to remove an external 
+ * interface it's using.  If it's not safe, return false, and the 
+ * extension will be unloaded afterwards.
+ *
+ * NOTE: It is important to also hook NotifyInterfaceDrop() in order to clean 
+ * up resources.
+ *
+ * @param pInterface		Pointer to interface being dropped.  This 
+ * 							pointer may be opaque, and it should not 
+ *							be queried using SMInterface functions unless 
+ *							it can be verified to match an existing 
+ *							pointer of known type.
+ * @return					True to continue, false to unload this 
+ * 							extension afterwards.
+ */
+bool ZombieMod::QueryInterfaceDrop(SMInterface *pInterface)
+{
+	// Validate interface dropping
+	return IsMetamodBintools(pInterface) ? false : IExtensionInterface::QueryInterfaceDrop(pInterface);
+}
+
+/**
+ * @brief Notifies the extension that an external interface it uses is being removed.
+ *
+ * @param pInterface		Pointer to interface being dropped.  This
+ * 							pointer may be opaque, and it should not 
+ *							be queried using SMInterface functions unless 
+ *							it can be verified to match an existing 
+ */
+void ZombieMod::NotifyInterfaceDrop(SMInterface *pInterface)
+{
+	// We have to take care of dependencies modules early
+	if (IsMetamodBintools(pInterface))
+	{
+		UtilInterfaceDrop();
+		bintools = NULL;
+	}
+}
+
+/**
+ * @brief Called when server's map was loaded.
  *
  * @param pEdictList		Edict list buffer.
  * @param edictCount		Maximum amount of entities.
  * @param clientMax			Maximum amount of players.
  */
-void ServerActivate(edict_t *pEdictList, int edictCount, int clientMax)
+void SDK_OnMapload(edict_t *pEdictList, int edictCount, int clientMax)
 {
-	// Create timer for starting game mode
-	timersys->CreateTimer(&s_EventsCounter, 1.0, 0, TIMER_FLAG_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	// Forward function to modules
+	EventActivated();
+	CvarActivated();
 	
-	//char *model;
-	//ZombieGetModel(0, model);
-	//engine->PrecacheModel("models/player/custom_player/cso2_zombi/police.mdl", true);
-	
-	/*
-	// Execute main config file
-	engine->ServerCommand("exec sourcemod/zombiemod.cfg\n");
-	
-	// Execute map config file
-	char sMapConfig[BIG_LINE_LENGTH];
-	snprintf(sMapConfig, sizeof(sMapConfig), "exec sourcemod/zombiemod/%s.cfg\n", STRING(gpGlobals->mapname));
-	engine->ServerCommand(sMapConfig);
-	*/
+	// Return on success
+	RETURN_META(MRES_IGNORED);
+}
+
+/**
+ * @brief Called when server's map was unloaded.
+ */
+void SDK_OnMapUnload()
+{
+	// Forward function to modules
+	NaviteShutDown();
 	
 	// Return on success
 	RETURN_META(MRES_IGNORED);
